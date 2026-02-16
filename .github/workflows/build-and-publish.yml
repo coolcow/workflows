@@ -28,7 +28,8 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: coolcow/${{ inputs.image_name }}
   # Define a stable tag for the local test image, using the real image name
-  TEST_IMAGE_TAG: ${{ env.REGISTRY }}/coolcow/${{ inputs.image_name }}:local-test-build
+  # We construct the tag directly as the 'env' context is not available for self-reference.
+  TEST_IMAGE_TAG: ghcr.io/coolcow/${{ inputs.image_name }}:local-test-build
 
 jobs:
   build-and-publish:
