@@ -19,10 +19,16 @@ on:
         required: false
         type: string
         default: '.'
+      test_dockerfile_path:
+        description: 'Optional path to a Dockerfile for testing the image. If provided, tests will run before pushing.'
+        required: false
+        type: string
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: coolcow/${{ inputs.image_name }}
+  # Define a stable tag for the local test image, using the real image name
+  TEST_IMAGE_TAG: ${{ env.REGISTRY }}/coolcow/${{ inputs.image_name }}:local-test-build
 
 jobs:
   build-and-publish:
@@ -64,6 +70,26 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             # Create 'latest' tag but only on formal releases (tags)
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+      
+      # Optional Test Step: Build a local image for testing
+      - name: Build local image for testing
+        if: inputs.test_dockerfile_path != ''
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.build_context }}
+          file: ${{ inputs.dockerfile_path }}
+          load: true # Load the image into the runner's docker daemon
+          push: false # Do not push
+          tags: ${{ env.TEST_IMAGE_TAG }}
+
+      # Optional Test Step: Run tests using the local image
+      - name: Run image tests
+        if: inputs.test_dockerfile_path != ''
+        run: |
+          docker build \
+            --build-arg ASSET_IMAGE=${{ env.TEST_IMAGE_TAG }} \
+            -f ${{ inputs.test_dockerfile_path }} \
+            ${{ inputs.build_context }}
 
       - name: Build and push Docker image
         id: build-and-push

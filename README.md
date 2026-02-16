@@ -31,7 +31,43 @@ jobs:
     with:
       image_name: 'your-project-image-name' # Required: The specific name for your project's Docker image
       # build_context: '.' # Optional: If your Dockerfile is not at the root of the context, specify it here
+      # test_dockerfile_path: 'build/Dockerfile.test' # Optional: Path to a Dockerfile for testing asset images
     secrets: inherit # Required: Allows the reusable workflow to access secrets from your project
+```
+
+### Inputs
+
+The `build-and-publish.yml` workflow accepts the following inputs:
+
+| Input                  | Description                                                                                                                                                            | Required | Default            |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------ |
+| `image_name`           | The specific name for the project's Docker image, which will be prefixed with `coolcow/`.                                                                                | `true`   | `N/A`              |
+| `dockerfile_path`      | The path to the main `Dockerfile`.                                                                                                                                     | `false`  | `build/Dockerfile` |
+| `build_context`        | The build context path for the Docker build.                                                                                                                           | `false`  | `.`                |
+| `test_dockerfile_path` | Optional path to a `Dockerfile` used for testing. If provided, the workflow runs an intermediate test step. This is ideal for verifying the contents of asset images. | `false`  | `''`               |
+
+### Asset Image Testing
+
+The optional `test_dockerfile_path` input enables a two-step build process ideal for "asset images" (e.g., `FROM scratch` images containing only scripts or files).
+
+1.  **Build Local:** The primary image is built and loaded into the runner's local Docker daemon with a temporary tag.
+2.  **Test:** A second build is initiated using the `test_dockerfile_path`. This test `Dockerfile` should use the temporary image as its base (via a build argument `ASSET_IMAGE`) and run commands to verify its contents. If any `RUN` command fails, the entire workflow fails.
+
+**Example `Dockerfile.test`:**
+```dockerfile
+# The asset image to test is passed via build-arg
+ARG ASSET_IMAGE
+FROM ${ASSET_IMAGE} AS assets_to_test
+
+# Use a standard image with a shell for testing
+FROM alpine:latest
+
+# Copy the contents from the asset image to a testable location
+COPY --from=assets_to_test /assets/ /testdata/
+
+# Run verification commands. A failure here will fail the build.
+RUN test -f /testdata/my_script.sh && \
+    grep -q "expected content" /testdata/my_script.sh
 ```
 
 **Important Notes:**
